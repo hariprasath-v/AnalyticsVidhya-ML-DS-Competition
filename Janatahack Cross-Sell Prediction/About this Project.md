@@ -1,9 +1,9 @@
 
 **Janatahack: Cross-sell Prediction**
 
-![alt text](https://github.com/hariprasath-v/AnalyticsVidhya-Competition/blob/TidyTuesday/Janatahack%20Cross-Sell%20Prediction/problem%20statement.JPG)
+![alt text](https://github.com/hariprasath-v/AnalyticsVidhya-ML-DS-Competition/blob/AnalyticsVidhya-ML-DS-Competition/Janatahack%20Cross-Sell%20Prediction/problem%20statement.JPG)
 
-![alt text](https://github.com/hariprasath-v/AnalyticsVidhya-Competition/blob/TidyTuesday/Janatahack%20Cross-Sell%20Prediction/Data%20Description.JPG)
+![alt text](https://github.com/hariprasath-v/AnalyticsVidhya-ML-DS-Competition/blob/AnalyticsVidhya-ML-DS-Competition/Janatahack%20Cross-Sell%20Prediction/Data%20Description.JPG)
 
 
 
