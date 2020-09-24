@@ -1,0 +1,1342 @@
+---
+title: "JanataHack Cross-Sell Prediction"
+author: "Hariprasath Venkatraman"
+output:
+  html_document:
+    pdf_document: default
+    theme: paper
+    word_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = F,error = F,
+                      message = F,fig.align = "center",
+                      tidy=FALSE)
+```
+
+#### Import Necessary Packages
+```{r}
+{
+  
+library(tidyverse)
+library(knitr)
+library(DT)
+library(psych)
+library(RColorBrewer)
+library(tidytext)
+library(caret)
+library(patchwork)
+  
+}
+
+```
+
+
+#### Import Train and Test Dataset
+
+```{r}
+train <- read.csv("train.csv",header = T,
+                 na.strings = c(""," ","NA"))
+
+test <- read.csv("test.csv",header = T,
+                 na.strings = c(""," ","NA"))
+```
+
+
+#### Let's analyze the structure of the train and test dataset
+
+
+## {.tabset .tabset-fade}
+
+
+
+### Train Dataset
+
+```{r}
+str(train)
+```
+
+### Test Dataset
+
+```{r}
+str(test)
+```
+
+
+##
+
+
+#### Let's analyze the summary of each variable in the train and test dataset
+
+
+## {.tabset .tabset-fade}
+
+
+
+### Train Dataset
+
+```{r}
+datatable(
+  describe(train, IQR = T),
+  extensions = 'FixedColumns',
+  options = list(
+  dom = 't',
+  scrollX = TRUE,
+  fixedColumns = TRUE
+  )
+  )
+```
+
+### Test Dataset
+
+```{r}
+datatable(
+  describe(test , IQR = T),
+  extensions = 'FixedColumns',
+  options = list(
+  dom = 't',
+  scrollX = TRUE,
+  fixedColumns = TRUE
+  )
+  )
+```
+
+
+##
+
+
+#### Lets view the sample of train and test dataset.
+
+
+## {.tabset .tabset-fade}
+
+
+
+### Train Dataset
+
+```{r}
+datatable(
+  head(train),
+  extensions = 'FixedColumns',
+  options = list(
+  dom = 't',
+  scrollX = TRUE,
+  fixedColumns = TRUE
+  )
+  )
+```
+
+### Test Dataset
+
+```{r}
+datatable(
+  head(test) ,
+  extensions = 'FixedColumns',
+  options = list(
+  dom = 't',
+  scrollX = TRUE,
+  fixedColumns = TRUE
+  ))
+  
+```
+
+##
+
+
+
+## Exploratory Data Analysis
+
+
+### Let's check the Target variable(customer response) distribution and see how many customers are interested and not interested to take insurance for their vehicle.
+
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response) %>%
+  summarise(counts = n())  %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  select(Response, pct, counts) %>%
+  ungroup() %>%
+  ggplot(aes(
+  x = Response,
+  y = pct,
+  fill = Response,
+  label = scales::percent(pct)
+  )) +
+  geom_bar(stat = "identity", width = 0.5) +
+  geom_text(vjust = 1,
+  colour = "white",
+  fontface = "bold") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Customer Response",
+  y = "",
+  title = "Customer Response on Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "none",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+```
+
+
+#### The above distribution shows 88% of customers are not interested in vehicle insurance and 12% of customers are interested to take vehicle insurance and also it shows that that the target variable is highly imbalanced. Biased towards one class.
+
+
+
+### lets perform Bi-Variate analysis and see the relation between an independent varaible(x) and dependent varaible(y). 
+
+
+
+### Let's check the relation between the Gender variable and customer response and check is there any differences in customer response by gender.
+
+
+
+#### Gender wise count and percentage
+
+
+```{r}
+train %>% group_by(Gender) %>% 
+  summarise(counts=n()) %>% 
+  mutate(percentage= scales::percent(counts/sum(counts)))
+```
+
+
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response, Gender) %>%
+  summarise(counts = n())  %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  
+  select(Gender, Response, pct) %>%
+  ggplot(aes(x = Gender, y = pct, fill = Response)) +
+  geom_bar(stat = "identity",
+  position = position_dodge(0.8),
+  width = 0.5) +
+  geom_text(
+  aes(group = Response,
+  label = scales::percent(pct , group = x)),
+  colour = "white",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = 5,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Gender",
+  y = "",
+  title = "Gender Wise Customer Response on Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "right",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+
+```
+
+
+#### The above chart shows that female customers are less interested to get insurance for their vehicles.
+
+
+
+### Let's see the age distribution by customer response.
+
+
+
+```{r}
+meandata <- train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response) %>%
+  summarise(means = mean(Age))
+  
+  
+  tr_age <- train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  ggplot(aes(x = Response, y = Age, fill = Response)) +
+  geom_violin() +
+  geom_boxplot(width = 0.15,
+  outlier.color  = "lawngreen",
+  outlier.size = 2) +
+  geom_text(
+  color = "white",
+  data = meandata,
+  aes(y = means, label = round(means, 1)),
+  size = 4,
+  fontface = "bold",
+  vjust = -0.5
+  ) +
+  stat_summary(
+  fun = mean,
+  geom = "point",
+  shape = 20,
+  size = 5
+  
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(x = "Customer Response",
+  y = "Age",
+  title = "Age Distribution by Customer Response ") +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "none",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### For Histogram chart, binwidth selected by using Freedman–Diaconis rule.
+
+
+```{r, fig.width=14, fig.height=12}
+
+agebin<-hist(train$Age,breaks = "FD",plot = F)
+
+```
+
+```{r}
+tr_age_his <- train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  ggplot() +
+  aes(x = Age, fill = Response) +
+  geom_histogram(breaks = agebin$breaks) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = seq(20, 90, by = 5)) +
+  labs(x = "Age",
+  y = "NUmber of Customers",
+  caption = "Source: AnalyticsVidhya") +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+  tr_age / tr_age_his
+```
+
+
+#### The above violin chart explains that the interested and non-interested customers of vehicle insurance and its age distribution mean to have a small difference. Also, the not-interested customer's age distribution median value is less than the mean value. Interested customer age distribution has some data points outside Quartile-3-(LightGreen color). 
+
+
+
+#### The above histogram chart explains that the customers under the age of 30 are less likely to get insurance for their vehicles. after the age of 55, the customer's interest in vehicle insurance is gradually decreased.
+
+
+
+### Let's analyze how many customers are having a driving license or not.Then check how many of them interested in to get the insurance for their vehicle.
+
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License")
+  ) %>%
+  group_by(Response, Driving_License) %>%
+  summarise(counts = n())  %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  
+  select(Driving_License, Response, pct) %>%
+  ggplot(aes(x = Driving_License, y = pct, fill = Response)) +
+  geom_bar(stat = "identity",
+  position = position_dodge(0.8),
+  width = 0.5) +
+  geom_text(
+  aes(group = Response,
+  label = scales::percent(pct , group = x)),
+  colour = "black",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = -0.2,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Driving_License Status",
+  y = "",
+  title = "DL and No-DL Customer's Response on Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "right",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+```
+
+```{r}
+
+  train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License")
+  ) %>%
+  group_by(Response, Driving_License) %>%
+  summarise(counts = n()) 
+```
+
+
+#### The above chart explains that 771 customers neither hava a driving license and not-interested in to get vehicle insurance for their vehicle.
+
+
+
+### Let's check the Region wise customer Response on vehicle insurance. 
+
+
+```{r}
+length(unique(train$Region_Code))
+
+```
+
+
+
+#### The total number of region is 53 so filter the top 10 region based on customer response. 
+
+
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response, Region_Code) %>%
+  summarise(counts = n()) %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  top_n(pct, n = 10) %>%
+  ggplot(aes(
+  x = reorder_within(factor(Region_Code), -pct, factor(Response)),
+  y = pct,
+  fill = Response
+  )) +
+  geom_bar(stat = "identity") +
+  geom_text(
+  aes(
+  group = Response,
+  label = scales::percent(pct, accuracy = .01)
+  ),
+  colour = "black",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = -0.2,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  facet_wrap(~ factor(Response) , scales = "free") +
+  theme(legend.position = "bottom") +
+  scale_x_reordered() +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Region Code",
+  y = "",
+  title = "Region wise Customer's Response on Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  strip.background.x =   element_rect(fill = "NA"),
+  strip.background.y =   element_rect(fill = "thistle2"),
+  strip.text.x = element_text(color = "black", size = 10, face = "bold"),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "none",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### The above chart explains that customers in the 28th region are highly interested to get vehicle insurance. Also, those region's not-interested customer count is also high.
+
+
+
+### Let's check the customer response on vehicle insurance  by previously insured customers.
+
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Previously_Insured = recode(Previously_Insured,
+  "0" = "No",
+  "1" = "Yes")
+  ) %>%
+  group_by(Response, Previously_Insured) %>%
+  summarise(counts = n())  %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  
+  select(Previously_Insured, Response, pct) %>%
+  ggplot(aes(x = Previously_Insured, y = pct, fill = Response)) +
+  geom_bar(stat = "identity",
+  position = position_dodge(0.8),
+  width = 0.5) +
+  geom_text(
+  aes(group = Response,
+  label = scales::percent(pct , group = x)),
+  colour = "black",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = -0.2,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Previously Insured",
+  y = "",
+  title = "Previously Insured Customer's Response on Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "right",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+
+```
+
+
+#### The above chart explains that previously not insured customers are highly interested to get vehicle insurance and at the same time Previously insured customers are not interested to get vehicle insurance.
+
+
+
+### Let's check the customer response on vehicle insurance by various-year-old customer's Vehicles.
+
+
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response, Vehicle_Age) %>%
+  summarise(counts = n())  %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  
+  select(Vehicle_Age, Response, pct) %>%
+  ggplot(aes(x = Vehicle_Age, y = pct, fill = Response)) +
+  geom_bar(stat = "identity",
+  position = position_dodge(0.8),
+  width = 0.5) +
+  geom_text(
+  aes(group = Response,
+  label = scales::percent(pct , group = x)),
+  colour = "black",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = -0.2,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Vehicle Age ",
+  y = "",
+  title = "various-year-old Vehicle Customer's Response in Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "right",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+```
+
+
+
+#### The above chart explains that less than 1 year old vehicle owners are less likely get insurance for their vehicle.1 to 2 years old Vehicle customers are highly interested to get insurance for their vehicle.
+
+
+
+#### If the vehicle is getting old , the customer is less likely to renew/get insurance for their vehicle.
+
+
+
+### Let's check the customer response on vehicle insurance by vehicle damage status.
+
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response, Vehicle_Damage) %>%
+  summarise(counts = n())  %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  
+  select(Vehicle_Damage, Response, pct) %>%
+  ggplot(aes(x = Vehicle_Damage, y = pct, fill = Response)) +
+  geom_bar(stat = "identity",
+  position = position_dodge(0.8),
+  width = 0.5) +
+  geom_text(
+  aes(group = Response,
+  label = scales::percent(pct , group = x)),
+  colour = "black",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = -0.2,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Vehicle Damage",
+  y = "",
+  title = "Customer's Response in Vehicle Insurance by Vehicle Damage",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "right",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+```
+
+
+#### The above chart explains that damaged vehicle owners are very likely to get insurance for their vehicles.
+
+
+### Let's see the annual premium distribution by customer response
+
+
+```{r ,fig.width=14,fig.height=13}
+meandata1 <- train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response) %>%
+  summarise(means = mean(Annual_Premium))
+  
+  
+  train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  ggplot(aes(
+  x = Response,
+  y = Annual_Premium,
+  fill = Response
+  )) +
+  geom_violin() +
+  geom_boxplot(width = 0.15,
+  outlier.color  = "lawngreen",
+  outlier.size = 2) +
+  geom_text(
+  color = "white",
+  data = meandata1,
+  aes(y = means, label = round(means, 1)),
+  size = 4,
+  fontface = "bold",
+  vjust = -0.5
+  ) +
+  stat_summary(
+  fun = mean,
+  geom = "point",
+  shape = 20,
+  size = 5
+  
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Customer Response",
+  y = "",
+  title = "Annual Premium Distribution by Customer Response ",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "none",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  ) 
+
+```
+
+
+#### The above chart explains that annual premium cost distribution looks normal but more number of  data points are outside the third quartile.
+
+
+```{r}
+train %>%  group_by(Annual_Premium) %>% 
+  summarise(c=n()) %>% arrange(desc(c)) %>% head()
+```
+
+
+#### The number of customers are in the annual premium range 2630 is high.
+
+
+### Let's Check Customer response on vehicle insurance by various policy sales channel.
+
+
+```{r}
+length(unique(train$Policy_Sales_Channel))
+```
+
+
+#### The total number of policy sales channel is 155 so filter the top 10 policy sales channel based on customer response. 
+
+
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  group_by(Response, Policy_Sales_Channel) %>%
+  summarise(counts = n()) %>%
+  mutate(pct =   counts / sum(counts)) %>%
+  top_n(pct, n = 10) %>%
+  select(Policy_Sales_Channel, pct) %>%
+  ggplot(aes(
+  x = reorder_within(factor(Policy_Sales_Channel),-pct, factor(Response)),
+  y = pct,
+  fill = Response
+  )) +
+  geom_bar(stat = "identity") +
+  geom_text(
+  aes(
+  group = Response,
+  label = scales::percent(pct, accuracy = .01)
+  ),
+  colour = "black",
+  fontface = "bold",
+  position = position_dodge(width = 0.8),
+  vjust = -0.2,
+  size = 3.5,
+  stat = "identity",
+  hjust = 0.5
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  facet_wrap(~ Response , scales = "free", drop = TRUE) +
+  theme(legend.position = "bottom") +
+  scale_x_reordered() +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+  x = "Policy Sales Channel",
+  y = "",
+  title = "Policy Sales Channel wise Customer's Response on Vehicle Insurance",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  strip.background.x =   element_rect(fill = "NA"),
+  strip.background.y =   element_rect(fill = "thistle2"),
+  strip.text.x = element_text(color = "black", size = 10, face = "bold"),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.position = "none",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### The above chart explains that customers contacted via the channel 28 are highly interested to get insurance for their vehicle.
+
+
+
+### Let's analyze how many days customers are associated with the insurance companies and check their responses on vehicle insurance.
+
+
+#### binwidth selected by using Freedman–Diaconis rule
+
+```{r}
+vintagebin<-hist(train$Vintage,breaks = "FD",plot = F)
+```
+
+```{r}
+train %>%
+  mutate(Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested")) %>%
+  ggplot() +
+  aes(x = Vintage, fill = Response) +
+  geom_histogram(breaks = vintagebin$breaks) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  #scale_x_continuous(breaks = seq(20, 90, by = 5))+
+  labs(
+  x = "Vinatge",
+  y = "NUmber of Customers",
+  title = "Customer Associated with the Company in Days",
+  caption = "Source: AnalyticsVidhya"
+  ) +
+  theme_dark() +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title = element_text(face = "bold"),
+  axis.text = element_text(face = "bold"),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### The above chart explains that the number of days the customers have associated with the insurance company and their response to interest in vehicle insurance doesn't show any differences.
+
+
+## Let's analyze & visualize the multiple variables together.
+
+
+#### First, analyze is there any relation between age and gender?. Then check the results with the customer response on vehicle insurance and with driving license status.
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License")
+  ) %>%
+  group_by(Age, Gender, Driving_License, Response) %>%
+  summarise(c = n()) %>%
+  ggplot() +
+  aes(x = Age, y = log(c), fill = Response) +
+  geom_histogram(stat = "identity") +
+  scale_x_continuous(breaks = seq(20, 90, by = 5)) +
+  theme_dark() +
+  facet_grid(Driving_License ~ Gender) +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title.x =   element_text(face = "bold"),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  strip.background = element_rect(fill = NA),
+  strip.text =  element_text(face = "bold", color = "black"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### The above chart explains that the customers who don't have a driving license, less likely interested in vehicle insurance. Them age range between 45 to 85.
+
+
+
+#### Male customers counts are high in the No-driving license category when compared to females.
+
+
+### Let's analyze the region and gender-wise driving license status of a customer and check their responses on vehicle insurance.
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License")
+  ) %>%
+  group_by(Region_Code, Gender, Driving_License, drop = T, Response) %>%
+  summarise(c = n()) %>%
+  ggplot() +
+  aes(x = Region_Code, y = log(c), fill = Response) +
+  geom_bar(stat = "identity", position = "stack") +
+  theme_dark() +
+  facet_grid( ~ Gender ~ Driving_License, space = "free") +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title.x =   element_text(face = "bold"),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  strip.background = element_rect(fill = NA),
+  strip.text =  element_text(face = "bold", color = "black"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+
+```
+
+
+#### The above chart explains that the 28th region driving license customers are high and also non-licensed customers are also high.
+
+
+
+### Let's analyze the gender-wise customer responses of previously insured customers and their driving license status.
+
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License"),
+  Previously_Insured = recode(Previously_Insured,
+  "1" = "Yes",
+  "0" = "No")
+  ) %>%
+  group_by(Previously_Insured, Gender, Driving_License, Response) %>%
+  summarise(c = n()) %>%
+  ggplot() +
+  aes(x = Previously_Insured, y = log(c), fill = Response) +
+  geom_bar(width = 0.5,
+  stat = "identity",
+  position = position_dodge(0.8)) +
+  geom_text(
+  aes(label = c),
+  position = position_dodge(0.8),
+  fontface = "bold",
+  vjust = -0.25
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_dark() +
+  facet_grid( ~ Gender ~ Driving_License, space = "free") +
+  theme(
+  axis.ticks = element_blank(),
+  axis.title.x =   element_text(face = "bold"),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  strip.background = element_rect(fill = NA),
+  strip.text =  element_text(face = "bold", color = "black"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+```
+
+
+#### The above chart explains that non-licensed customers who are previously insured, they are less likely interested in vehicle insurance. 
+
+
+
+### Let's analyze the vehicle age-wise customer responses with their driving license status and check those results with previous insured information.
+
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License"),
+  Previously_Insured = recode(Previously_Insured,
+  "1" = "Yes",
+  "0" = "No")
+  ) %>%
+  group_by(Vehicle_Age,
+  Previously_Insured,
+  Gender,
+  Driving_License,
+  Response) %>%
+  summarise(c = n()) %>%
+  ggplot() +
+  aes(x = Previously_Insured, y = log(c), fill = Response) +
+  geom_bar(width = 0.5,
+  stat = "identity",
+  position = position_dodge(0.8)) +
+  geom_text(
+  aes(label = c),
+  position = position_dodge(0.8),
+  fontface = "bold",
+  vjust = -0.2,
+  size = 3
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_dark() +
+  facet_grid(Vehicle_Age ~ Driving_License + Gender, scales = "free") +
+  theme(
+  panel.spacing.x = unit(1, "lines"),
+  panel.spacing.y = unit(1, "lines"),
+  axis.ticks = element_blank(),
+  axis.title.x =   element_text(face = "bold"),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  strip.background = element_rect(fill = NA),
+  strip.text =  element_text(face = "bold", color = "black"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+
+```
+
+
+#### The above chart explains that there are no male customers who don't have driving license in the less than 1 year old vehicle category.
+
+
+
+### Let's analyze gender-wise license status and check have they insured their vehicle previously or not? also, analyze those results with vehicle damage rate and customer responses on vehicle insurance.
+
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Driving_License = recode(Driving_License,
+  "0" = "No_Driving_License",
+  "1" = "Driving_License"),
+  Previously_Insured = recode(Previously_Insured,
+  "1" = "Insured",
+  "0" = "Not_Insured"),
+  Vehicle_Damage = recode(Vehicle_Damage, "Yes" = "Damaged",
+  "No" = "No_Damage")
+  ) %>%
+  group_by(Vehicle_Damage,
+  Previously_Insured,
+  Driving_License,
+  Response,
+  Gender) %>%
+  summarise(c = n()) %>%
+  ggplot() +
+  aes(x = Gender , y = log(c), fill = Response) +
+  geom_bar(width = 0.5,
+  stat = "identity",
+  position = position_dodge(0.8)) +
+  geom_text(
+  aes(label = c),
+  position = position_dodge(0.8),
+  fontface = "bold",
+  vjust = -0.2,
+  size = 3
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_dark() +
+  facet_grid(Previously_Insured ~ Vehicle_Damage + Driving_License, scales =
+  "free") +
+  theme(
+  panel.spacing.x = unit(1, "lines"),
+  panel.spacing.y = unit(1, "lines"),
+  axis.ticks = element_blank(),
+  axis.title.x =   element_text(face = "bold"),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  strip.background = element_rect(fill = NA),
+  strip.text =  element_text(face = "bold", color = "black"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### The above chart explains that the damage rate is high in the category of customers who have a driving license or have not insured previously for their vehicle.
+
+
+#### The licensed and damged vehicle customers who haven't insured previously insured are highly interested to get insurance for their vehicle.
+
+
+
+### Let's check are there any relation between annual premium and vehicle age?also, check previously insured customers annual premium.
+
+
+
+```{r}
+train %>%
+  mutate(
+  Response = recode(Response,
+  "0" = "Not_Interested",
+  "1" = "Interested"),
+  Previously_Insured = recode(Previously_Insured,
+  "1" = "Insured",
+  "0" = "Not_Insured")
+  ) %>%
+  group_by(Previously_Insured, Response, Vehicle_Age) %>%
+  ggplot() +
+  aes(x = Vehicle_Age, y = Annual_Premium, fill = Response) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_dark() +
+  facet_wrap( ~ Previously_Insured, scales = "free") +
+  theme(
+  panel.spacing.x = unit(1, "lines"),
+  panel.spacing.y = unit(1, "lines"),
+  axis.ticks = element_blank(),
+  axis.title.x =   element_text(face = "bold"),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(face = "bold"),
+  axis.text.y = element_blank(),
+  plot.title = element_text(hjust = 0.5, face = "bold"),
+  plot.caption = element_text(face = "bold"),
+  strip.background = element_rect(fill = NA),
+  strip.text =  element_text(face = "bold", color = "black"),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  legend.title = element_text(size = 10, hjust = 0.5, face = "bold"),
+  legend.text = element_text(size = 9, face = "bold"),
+  legend.key = element_rect(fill = NA, color = NA),
+  legend.position = "bottom",
+  panel.grid = element_blank(),
+  plot.background = element_rect(fill = NA),
+  panel.background = element_rect(fill = "transparent")
+  )
+  
+```
+
+
+#### The above chart explains that there are no significant changes in annual premium with vehicle age.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
